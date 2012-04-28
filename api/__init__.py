@@ -32,7 +32,7 @@ def index():
     for dataset in datasets:
         print "x"
         response.append(dataset.data)
-    return jsonify(response)
+    return hacky_jsonify_list(response)
 
 
 @app.route('/get_recent_datasets')

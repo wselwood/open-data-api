@@ -1,28 +1,19 @@
 from flaskext.mongoalchemy import BaseQuery
-import requests
 import json
 
-from api import app
 from api import db
 
-
-from lxml import etree
 import lxml.html
-import urllib
-import sys
 
 class JSONField(db.StringField):
-    def unwrap(self, value, *args, **kwargs):
-        """Pass the json field around as a dictionary internally"""
-        return json.loads(value)
+	def unwrap(self, value, *args, **kwargs):
+		"""Pass the json field around as a dictionary internally"""
+		return json.loads(value)
 
 class DatasetQuery(BaseQuery):
-    #Searches on the code given to each center that releases images
-    def filter_by_center_code(self, center_code):
-	results = self.filter(Grin.center_code == center_code)
-	list1 = []
-	for grin in results:
-		dictionary = dict(internal_id = str(grin.mongo_id), 
+	
+	def build_dictionary(self, grin):
+		return dict(internal_id = str(grin.mongo_id), 
 				image_reference = grin.image_reference, 
 				grin_id = grin.grin_id, 
 				data_url = grin.data_url, 
@@ -55,166 +46,106 @@ class DatasetQuery(BaseQuery):
 				large_height = grin.large_height, 
 				large_width = grin.large_width, 
 				large_size = grin.large_size)
-		list1.append(dictionary)
+	
+	def convert_results(self, results):
+		list1 = []
+		for grin in results:
+			dictionary = self.build_dictionary(grin)
+			list1.append(dictionary)
+	
+		return list1
+	
+	#Searches on the code given to each center that releases images
+	def filter_by_center_code(self, center_code):
+		results = self.filter(Grin.center_code == center_code)
+		return self.convert_results(results)
 
-	return list1
+	#Searches based on the GRIN id given to an image - unique for each image
+	def filter_by_grin_id(self, grin_id):
+		results = self.filter(Grin.grin_id == grin_id)
+		return self.convert_results(results)
 
-    #Searches based on the GRIN id given to an image - unique for each image
-    def filter_by_grin_id(self, grin_id):
-	results = self.filter(Grin.grin_id == grin_id)
-	list1 = []
-	for grin in results:
-                dictionary = dict(internal_id = str(grin.mongo_id),
-                                image_reference = grin.image_reference,
-                                grin_id = grin.grin_id,
-                                data_url = grin.data_url,
-                                image_creator = grin.image_creator,
-                                original_source = grin.original_source,
-                                date_time = grin.date_stamp,
-                                center_code = grin.center_code,
-                                center_name = grin.center_name,
-                                short_desc = grin.short_description,
-                                full_desc = grin.full_description,
-                                keywords = grin.keyword_list,
-                                subjects = grin.subject_list,
-                                thumbnail_url = grin.thumbnail_url,
-                                thumbnail_type = grin.thumbnail_type,
-                                thumbnail_height = grin.thumbnail_height,
-                                thumbnail_width = grin.thumbnail_width,
-                                thumbnail_size = grin.thumbnail_size,
-                                small_url = grin.small_url,
-                                small_type = grin.small_type,
-                                small_height = grin.small_height,
-                                small_width = grin.small_width,
-                                small_size = grin.small_size,
-                                medium_url = grin.medium_url,
-                                medium_type = grin.medium_type,
-                                medium_height = grin.medium_height,
-                                medium_width = grin.medium_width,
-                                medium_size = grin.medium_size,
-                                large_url = grin.large_url,
-                                large_type = grin.large_type, 
-                                large_height = grin.large_height, 
-                                large_width = grin.large_width, 
-                                large_size = grin.large_size)
-
-		list1.append(dictionary)
-
-	return list1
-
-    #Will search on a keyword-type basis on the full description.
-    #Currently doesn't work properly. Ooops.
-    def filter_by_description(self, description):
-	results = self.filter({ 'full_description' : '/.* missile .*/' })
-        list1 = []
-        for grin in results:
-                dictionary = dict(internal_id = str(grin.mongo_id),
-                                image_reference = grin.image_reference,
-                                grin_id = grin.grin_id,
-                                data_url = grin.data_url,
-                                image_creator = grin.image_creator,
-                                original_source = grin.original_source,
-                                date_time = grin.date_stamp,
-                                center_code = grin.center_code,
-                                center_name = grin.center_name,
-                                short_desc = grin.short_description,
-                                full_desc = grin.full_description,
-                                keywords = grin.keyword_list,
-                                subjects = grin.subject_list,
-                                thumbnail_url = grin.thumbnail_url,
-                                thumbnail_type = grin.thumbnail_type,
-				 thumbnail_height = grin.thumbnail_height,
-                                thumbnail_width = grin.thumbnail_width,
-                                thumbnail_size = grin.thumbnail_size,
-                                small_url = grin.small_url,
-                                small_type = grin.small_type,
-                                small_height = grin.small_height,
-                                small_width = grin.small_width,
-                                small_size = grin.small_size,
-                                medium_url = grin.medium_url,
-                                medium_type = grin.medium_type,
-				medium_height = grin.medium_height,
-                                medium_width = grin.medium_width,
-                                medium_size = grin.medium_size,
-                                large_url = grin.large_url,
-                                large_type = grin.large_type,
-                                large_height = grin.large_height,
-                                large_width = grin.large_width,
-                                large_size = grin.large_size)
-
-                list1.append(dictionary)
+	#Will search on a keyword-type basis on the full description.
+	#Currently doesn't work properly. Ooops.
+	def filter_by_description(self, description):
+		results = self.filter({ 'full_description' : '/.* missile .*/' })
+		return self.convert_results(results)
 
 class Grin(db.Document):
-    data_url = db.StringField()
-    center_name = db.StringField()
-    image_reference = db.StringField()
-    date_stamp = db.StringField()
-    short_description = db.StringField()
-    full_description = db.StringField()
-    keyword_list = db.AnythingField()
-    subject_list = db.AnythingField()
-    center_code = db.StringField()
-    grin_id = db.StringField()
-    image_creator = db.StringField()
-    original_source = db.StringField()
-    thumbnail_url = db.StringField()
-    thumbnail_type = db.StringField()
-    thumbnail_width = db.StringField()
-    thumbnail_height = db.StringField()
-    thumbnail_size = db.StringField()
-    small_url = db.StringField()
-    small_type = db.StringField()
-    small_width = db.StringField()
-    small_height = db.StringField()
-    small_size = db.StringField()
-    medium_url = db.StringField()
-    medium_type = db.StringField()
-    medium_width = db.StringField()
-    medium_height = db.StringField()
-    medium_size = db.StringField()
-    large_url = db.StringField()
-    large_type = db.StringField()
-    large_width = db.StringField()
-    large_height = db.StringField()
-    large_size = db.StringField()
-    
-    query_class = DatasetQuery
+	data_url = db.StringField()
+	center_name = db.StringField()
+	image_reference = db.StringField()
+	date_stamp = db.StringField()
+	short_description = db.StringField()
+	full_description = db.StringField()
+	keyword_list = db.AnythingField()
+	subject_list = db.AnythingField()
+	center_code = db.StringField()
+	grin_id = db.StringField()
+	image_creator = db.StringField()
+	original_source = db.StringField()
+	thumbnail_url = db.StringField()
+	thumbnail_type = db.StringField()
+	thumbnail_width = db.StringField()
+	thumbnail_height = db.StringField()
+	thumbnail_size = db.StringField()
+	small_url = db.StringField()
+	small_type = db.StringField()
+	small_width = db.StringField()
+	small_height = db.StringField()
+	small_size = db.StringField()
+	medium_url = db.StringField()
+	medium_type = db.StringField()
+	medium_width = db.StringField()
+	medium_height = db.StringField()
+	medium_size = db.StringField()
+	large_url = db.StringField()
+	large_type = db.StringField()
+	large_width = db.StringField()
+	large_height = db.StringField()
+	large_size = db.StringField()
+	
+	query_class = DatasetQuery
 
 
 def find_all(string, occurrence):
-     found = 0
+	found = 0
 
-     while True:
-         found = string.find(occurrence, found)
-         if found != -1:
-             yield found
-         else:
-             break
+	while True:
+		found = string.find(occurrence, found)
+		if found != -1:
+			yield found
+		else:
+			break
 
-         found += 1
+		found += 1
 
 
 def get_pages():
 	center_list = ['AMES','DFRC','GRC','GSFC','HQ','JPL','JSC','KSC','LARC','MSFC','SSC']
 	for center in center_list:
 		html = lxml.html.parse('http://grin.hq.nasa.gov/BROWSE/' + center + '.html')
-        	page = lxml.html.tostring(html, pretty_print=True, method="html")
-		
+		page = lxml.html.tostring(html, pretty_print=True, method="html")
+			
 		first_tag = list(find_all(page, '<a href="/ABSTRACTS/'))
 		second_tag = list(find_all(page, '" accesskey="z"'))
 		
 		count = 0
-
 		while count < len(first_tag):
-			url = 'http://grin.hq.nasa.gov/ABSTRACTS/' + page[first_tag[count]+20:second_tag[count]]		
+			url = 'http://grin.hq.nasa.gov/ABSTRACTS/' + page[first_tag[count]+20:second_tag[count]]        
 			get_a_page(url)
 			count = count + 1
 		
 	return ''
-   
+	
 def get_a_page(url):
-
-	html = lxml.html.parse(url)
+	html = ""
+	try :
+		html = lxml.html.parse(url)
+	except IOError: 
+		print "page could not be found " + url
+		return 
+	
 	page = lxml.html.tostring(html, pretty_print=True, method="html")
 
 	startPos = page.find('NASA Center:')
