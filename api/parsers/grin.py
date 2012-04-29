@@ -68,7 +68,7 @@ class DatasetQuery(BaseQuery):
 	#Will search on a keyword-type basis on the full description.
 	#Currently doesn't work properly. Ooops.
 	def filter_by_description(self, description):
-		results = self.filter({ 'full_description' : '/.* missile .*/' })
+		results = self.filter({ 'full_description' : {'$regex' : description} })
 		return self.convert_results(results)
 
 class Grin(db.Document):
@@ -120,11 +120,26 @@ def find_all(string, occurrence):
 
 		found += 1
 
+def clean_string_list(stringList):
+	for entry in stringList:
+		yield entry.strip('\n\r ,\t')
+	
+	
+def extract_section(page, start, end):
+	startPos = page.find(start)
+	startPos = startPos + len(start)
+	endPos = page.find(end, startPos)
+	return page[startPos:endPos].strip()
 
+def extract_with_start_padding(page, start, end, startPadding, maxSearchLength = 200):
+	startPos = page.find(start)
+	startPos = startPos + startPadding
+	remaining = page[startPos:startPos+maxSearchLength]
+	endPos = remaining.find(end)
+	return remaining[0:endPos].strip()
+	
 def get_pages():
-	# replaced to make add quicker and not to spam nasa
-	#center_list = ['AMES','DFRC','GRC','GSFC','HQ','JPL','JSC','KSC','LARC','MSFC','SSC']
-	center_list = ['JPL']
+	center_list = ['AMES','DFRC','GRC','GSFC','HQ','JPL','JSC','KSC','LARC','MSFC','SSC']
 	for center in center_list:
 		html = lxml.html.parse('http://grin.hq.nasa.gov/BROWSE/' + center + '.html')
 		page = lxml.html.tostring(html, pretty_print=True, method="html")
@@ -140,10 +155,7 @@ def get_pages():
 		
 	return ''
 
-def clean_string_list(stringList):
-	for entry in stringList:
-		yield entry.strip('\n\r ,\t')
-	
+
 def get_a_page(url):
 	html = ""
 	try :
@@ -154,88 +166,46 @@ def get_a_page(url):
 	
 	page = lxml.html.tostring(html, pretty_print=True, method="html")
 
-	startPos = page.find('NASA Center:')
-	remaining = page[startPos+47:startPos+200]
-	endPos = remaining.find('</td>')
-	centerName = remaining[0:endPos]
 
-	startPos = page.find(' : </font></th>')
-	remaining = page[startPos+37:startPos+50]
-	endPos = remaining.find('</td>')
-	imageRef = remaining[0:endPos]
+	centerName = extract_with_start_padding(page, 'NASA Center:', '</td>', 47)
+
+	imageRef = extract_with_start_padding(page, ' : </font></th>', '</td>', 37, 50)
 
 	startPos = page.find('DA:')
 	dateTimestamp = page[startPos+3:startPos+10]
 
-	startPos = page.find('<!-- ONE-LINE-DESCRIPTION-BEGIN -->')
-	endPos = page.find('<!-- ONE-LINE-DESCRIPTION-END -->')
-	shortDescription = page[startPos+35:endPos].strip()
+	shortDescription = extract_section(page, '<!-- ONE-LINE-DESCRIPTION-BEGIN -->', '<!-- ONE-LINE-DESCRIPTION-END -->')
 
-	startPos = page.find('<!-- DESCRIPTION-BEGIN -->')
-	endPos = page.find('<!-- DESCRIPTION-END -->')
-	description = page[startPos+27:endPos].strip()
+	description = extract_section(page, '<!-- DESCRIPTION-BEGIN -->', '<!-- DESCRIPTION-END -->')
 
-	startPos = page.find('<!-- KEYWORD-BEGIN -->')
-	endPos = page.find('<!-- KEYWORD-END -->')
-	keywords = page[startPos+22:endPos]
+	keywords = extract_section(page, '<!-- KEYWORD-BEGIN -->', '<!-- KEYWORD-END -->')
 	keywordList = keywords.split()
 
-	startPos = page.find('<!-- SUBJECT-BEGIN -->')
-	endPos = page.find('<!-- SUBJECT-END -->')
-	subjects = page[startPos+22:endPos].strip().strip(',')
+	subjects = extract_section(page, '<!-- SUBJECT-BEGIN -->', '<!-- SUBJECT-END -->').strip(',')
 	subjectList = list(clean_string_list(subjects.split(',')))
 
-	startPos = page.find('<!-- CENTER-BEGIN -->')
-	endPos = page.find('<!-- CENTER-END -->')
-	centerCode = page[startPos+21:endPos]
-	centerCode = centerCode.strip()
+	centerCode = extract_section(page, '<!-- CENTER-BEGIN -->', '<!-- CENTER-END -->')
 
-	startPos = page.find('<!-- GRINNUMBER-BEGIN -->')
-	endPos = page.find('<!-- GRINNUMBER-END -->')
-	grinID = page[startPos+25:endPos]
-	grinID = grinID.strip()
+	grinID = extract_section(page, '<!-- GRINNUMBER-BEGIN -->', '<!-- GRINNUMBER-END -->')
 	
-	startPos = page.find('Creator/Photographer:')
-	remaining = page[startPos+25:startPos+50]
-	endPos = remaining.find('</li>')
-	creator = remaining[0:endPos]
-	creator = creator.strip()
+	creator = extract_with_start_padding(page, 'Creator/Photographer:', '</li>', 25)
 
-	startPos = page.find('Original Source:')
-	remaining = page[startPos+20:startPos+60]
-	endPos = remaining.find('</li>')
-	origSource = remaining[0:endPos]
-	origSource = origSource.strip()
+	origSource = extract_with_start_padding(page, 'Original Source:', '</li>', 20, 60)
 
+	# have to deal with image urls outside of function so we have early bail out.
 	startPos = page.find('<td id="r2" headers="c1"><a href="')
 	if startPos >= 0 :
 		remaining = page[startPos+34:startPos+200]
 		endPos = remaining.find('">')
 		thumbnailUrl = remaining[0:endPos]
 	
-		startPos = page.find('headers="c2 r2"')
-		remaining = page[startPos+31:startPos+60]
-		endPos = remaining.find('</td>')
-		thumbnailType = remaining[0:endPos]
-		thumbnailType = thumbnailType.strip()
+		thumbnailType = extract_with_start_padding(page, 'headers="c2 r2"', '</td>', 31, 60)
 	
-		startPos = page.find('headers="c3 r2"')
-		remaining = page[startPos+31:startPos+60]
-		endPos = remaining.find('</td>')
-		thumbnailWidth = remaining[0:endPos]
-		thumbnailWidth = thumbnailWidth.strip()
+		thumbnailWidth = extract_with_start_padding(page, 'headers="c3 r2"', '</td>', 31, 60)
 	
-		startPos = page.find('headers="c4 r2')
-		remaining = page[startPos+31:startPos+60]
-		endPos = remaining.find('</td>')
-		thumbnailHeight = remaining[0:endPos]
-		thumbnailHeight = thumbnailHeight.strip()
+		thumbnailHeight = extract_with_start_padding(page, 'headers="c4 r2', '</td>', 31, 60)
 	
-		startPos = page.find('headers="c5 r2"')
-		remaining = page[startPos+30:startPos+60]
-		endPos = remaining.find('</td>')
-		thumbnailSize = remaining[0:endPos]
-		thumbnailSize = thumbnailSize.strip()
+		thumbnailSize = extract_with_start_padding(page, 'headers="c5 r2"', '</td>', 30, 60)
 	else :
 		thumbnailUrl = ''
 		thumbnailType = 'None'
@@ -250,29 +220,13 @@ def get_a_page(url):
 		endPos = remaining.find('">')
 		smallUrl = remaining[0:endPos]
 	
-		startPos = page.find('headers="c2 r3"')
-		remaining = page[startPos+31:startPos+60]
-		endPos = remaining.find('</td>')
-		smallType = remaining[0:endPos]
-		smallType = smallType.strip()
+		smallType = extract_with_start_padding(page, 'headers="c2 r3"', '</td>', 31, 60)
 	
-		startPos = page.find('headers="c3 r3"')
-		remaining = page[startPos+31:startPos+60]
-		endPos = remaining.find('</td>')	
-		smallWidth = remaining[0:endPos]
-		smallWidth = smallWidth.strip()
+		smallWidth = extract_with_start_padding(page, 'headers="c3 r3"', '</td>', 31, 60)
 	
-		startPos = page.find('headers="c4 r3"')
-		remaining = page[startPos+31:startPos+60]
-		endPos = remaining.find('</td>')
-		smallHeight = remaining[0:endPos]
-		smallHeight = smallHeight.strip()
+		smallHeight = extract_with_start_padding(page, 'headers="c4 r3"', '</td>', 31, 60)
 	
-		startPos = page.find('headers="c5 r3"')
-		remaining = page[startPos+30:startPos+60]
-		endPos = remaining.find('</td>')
-		smallSize = remaining[0:endPos]
-		smallSize = smallSize.strip()
+		smallSize = extract_with_start_padding(page, 'headers="c5 r3"', '</td>', 30, 60)
 	else :
 		smallUrl = ''
 		smallType = 'None'
@@ -290,30 +244,14 @@ def get_a_page(url):
 		mediumUrl = remaining[0:endPos]
 	
 	
-		startPos = restOfRow3.find('headers="c2 r3"')
-		remaining = restOfRow3[startPos+31:startPos+60]
-		endPos = remaining.find('</td>')
-		mediumType = remaining[0:endPos]
-		mediumType = mediumType.strip()
+		mediumType = extract_with_start_padding(restOfRow3, 'headers="c2 r3"', '</td>', 31, 60)
 	
 	
-		startPos = restOfRow3.find('headers="c3 r3"')
-		remaining = restOfRow3[startPos+31:startPos+60]
-		endPos = remaining.find('</td>')
-		mediumWidth = remaining[0:endPos]
-		mediumWidth = mediumWidth.strip()
+		mediumWidth = extract_with_start_padding(restOfRow3, 'headers="c3 r3"', '</td>', 31, 60)
 	
-		startPos = restOfRow3.find('headers="c4 r3"')
-		remaining = restOfRow3[startPos+31:startPos+60]
-		endPos = remaining.find('</td>')
-		mediumHeight = remaining[0:endPos]
-		mediumHeight = mediumHeight.strip()
+		mediumHeight = extract_with_start_padding(restOfRow3, 'headers="c4 r3"', '</td>', 31, 60)
 	
-		startPos = restOfRow3.find('headers="c5 r3"')
-		remaining = restOfRow3[startPos+30:startPos+60]
-		endPos = remaining.find('</td>')
-		mediumSize = remaining[0:endPos]
-		mediumSize = mediumSize.strip()
+		mediumSize = extract_with_start_padding(restOfRow3, 'headers="c5 r3"', '</td>', 30, 60)
 	else :
 		mediumUrl = ''
 		mediumType = 'None'
@@ -328,31 +266,13 @@ def get_a_page(url):
 		endPos = remaining.find('">')
 		largeUrl = remaining[0:endPos]
 	
+		largeType = extract_with_start_padding(restOfRow4, 'headers="c2 r3"', '</td>', 31, 60)
 	
-		startPos = restOfRow4.find('headers="c2 r3"')
-		remaining = restOfRow4[startPos+31:startPos+60]
-		endPos = remaining.find('</td>')
-		largeType = remaining[0:endPos]
-		largeType = largeType.strip()
+		largeWidth = extract_with_start_padding(restOfRow4, 'headers="c3 r3"', '</td>', 31, 60)
 	
-		startPos = restOfRow4.find('headers="c3 r3"')
-		remaining = restOfRow4[startPos+31:startPos+60]
-		endPos = remaining.find('</td>')
-		largeWidth = remaining[0:endPos]
-		largeWidth = largeWidth.strip()
-	
-		startPos = restOfRow4.find('headers="c4 r3"')
-		remaining = restOfRow4[startPos+31:startPos+60]
-		endPos = remaining.find('</td>')
-		largeHeight = remaining[0:endPos]
-		largeHeight = largeHeight.strip()
+		largeHeight = extract_with_start_padding(restOfRow4, 'headers="c4 r3"', '</td>', 31, 60)
 		
-	
-		startPos = restOfRow4.find('headers="c5 r3"')
-		remaining = restOfRow4[startPos+30:startPos+60]
-		endPos = remaining.find('</td>')
-		largeSize = remaining[0:endPos]
-		largeSize = largeSize.strip()
+		largeSize = extract_with_start_padding(restOfRow4, 'headers="c5 r3"', '</td>', 30, 60)
 	else :
 		largeUrl = ''
 		largeType = 'None'
