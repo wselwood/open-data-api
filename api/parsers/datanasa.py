@@ -98,26 +98,31 @@ class Dataset(db.Document):
 
 
 def get_dataset(id):
-    response = requests.get(ENDPOINT + 'get_dataset?id=%s' % id)
-    data = json.loads(response.text)
-    post = data.get('post')
-    slug = post.get('slug')
-    date = datetime.strptime(post.get('date'), '%Y-%m-%d %H:%M:%S')
-
-    tags = set()
-    for tag in post.get('tags'):
-        new = Tag(description=tag['description'], remote_id=tag['id'],
-                  slug=tag['slug'], title=tag['title'])
-        new.save()
-        tags.add(new)
-
-    categories = post.get('categories')
-    category_objects = set()
-    for category in categories:
-        cat = Category(id=category['id'], slug=category['slug'])
-        cat.save()
-        category_objects.add(cat)
-
-    dataset = Dataset(remote_id = id, slug=slug, date_posted=date, data=response.text, categories=category_objects, tags=tags)
-    dataset.save()
+    existing = Dataset.query.get_by_remote_id(id) 
+    
+    if existing == None:
+        print(type(existing))
+        response = requests.get(ENDPOINT + 'get_dataset?id=%s' % id)
+        data = json.loads(response.text)
+        post = data.get('post')
+        slug = post.get('slug')
+        date = datetime.strptime(post.get('date'), '%Y-%m-%d %H:%M:%S')
+    
+        tags = set()
+        for tag in post.get('tags'):
+            new = Tag(description=tag['description'], remote_id=tag['id'],
+                      slug=tag['slug'], title=tag['title'])
+            new.save()
+            tags.add(new)
+    
+        categories = post.get('categories')
+        category_objects = set()
+        for category in categories:
+            cat = Category(id=category['id'], slug=category['slug'])
+            cat.save()
+            category_objects.add(cat)
+    
+        dataset = Dataset(remote_id = id, slug=slug, date_posted=date, data=response.text, categories=category_objects, tags=tags)
+      
+        dataset.save()
 
