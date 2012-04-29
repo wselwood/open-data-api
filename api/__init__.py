@@ -121,7 +121,7 @@ def get_grin_center():
     centre = request.args.get('centre') # required
 
     if not centre:
-	return Exception
+        return Exception
 
     response = Grin.query.filter_by_center_code(centre)
 
@@ -132,7 +132,7 @@ def get_grin_grinid():
     grin_id = request.args.get('id') # required
 
     if not grin_id:
-	return Exception
+        return Exception
 
     response = Grin.query.filter_by_grin_id(grin_id)
 
@@ -143,9 +143,31 @@ def get_grin_description():
     desc = request.args.get('description') # required
 
     if not desc:
-	return Exception
+        return Exception
 
     response = Grin.query.filter_by_description(desc)
 
     return hacky_jsonify_list(response)
 
+@app.route('/grin/get_by_keyword')
+def get_grin_keyword():
+    key = request.args.get('keyword') # required
+    
+    if not key :
+        return Exception
+    
+    response = Grin.query.filter_by_keyword(key)
+    return hacky_jsonify_list(response)
+
+@app.route('/grin/get_by_subject')
+def get_grin_subject():
+    subject = request.args.get('subject') # required
+    
+    if not subject :
+        return Exception
+    
+    response = Grin.query.filter_by_subject(subject)
+    return hacky_jsonify_list(response)
+    
+    
+    

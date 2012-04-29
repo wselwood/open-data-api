@@ -65,10 +65,21 @@ class DatasetQuery(BaseQuery):
 		results = self.filter(Grin.grin_id == grin_id)
 		return self.convert_results(results)
 
-	#Will search on a keyword-type basis on the full description.
-	#Currently doesn't work properly. Ooops.
+	#Search on a keyword-type basis on the full description. 
 	def filter_by_description(self, description):
 		results = self.filter({ 'full_description' : {'$regex' : description} })
+		return self.convert_results(results)
+
+	#Search in the keyword list
+	#Should this to accept comma separated list of keywords?
+	def filter_by_keyword(self, keyword):
+		results = self.filter({ 'keyword_list' : keyword})
+		return self.convert_results(results)
+	
+	#Search the subject list
+	#List keyword this should probably accept a list of keywords
+	def filter_by_subject(self, subject):
+		results = self.filter({ 'subject_list' : subject})
 		return self.convert_results(results)
 
 class Grin(db.Document):
@@ -78,8 +89,8 @@ class Grin(db.Document):
 	date_stamp = db.StringField()
 	short_description = db.StringField()
 	full_description = db.StringField()
-	keyword_list = db.AnythingField()
-	subject_list = db.AnythingField()
+	keyword_list = db.ListField(db.StringField())
+	subject_list = db.ListField(db.StringField())
 	center_code = db.StringField()
 	grin_id = db.StringField()
 	image_creator = db.StringField()
