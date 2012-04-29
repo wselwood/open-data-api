@@ -82,6 +82,11 @@ class DatasetQuery(BaseQuery):
 		results = self.filter({ 'subject_list' : subject})
 		return self.convert_results(results)
 
+	#check for a url in the db, used to stop us reloading pages that already have been loaded.
+	def filter_by_url(self, url):
+		results = self.filter({ 'data_url' : url})
+		return self.convert_results(results)
+
 class Grin(db.Document):
 	data_url = db.StringField()
 	center_name = db.StringField()
@@ -160,8 +165,11 @@ def get_pages():
 		
 		count = 0
 		while count < len(first_tag):
-			url = 'http://grin.hq.nasa.gov/ABSTRACTS/' + page[first_tag[count]+20:second_tag[count]]        
-			get_a_page(url)
+			url = 'http://grin.hq.nasa.gov/ABSTRACTS/' + page[first_tag[count]+20:second_tag[count]]  
+			#check if we have already loaded this page.    
+			existing = Grin.query.filter_by_url(url)
+			if existing == None :  
+				get_a_page(url)
 			count = count + 1
 		
 	return ''
